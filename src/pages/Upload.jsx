@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router';
 import {
   Upload as UploadIcon,
@@ -10,15 +10,14 @@ import {
   Loader2,
   ClipboardPaste,
   Wand2,
-  Settings2,
-  ChevronDown,
-  ChevronUp,
+  Sparkles,
   Eye,
+  Info,
 } from 'lucide-react';
 import Header from '../components/Layout/Header';
 import { parsePDF, readFileAsArrayBuffer } from '../services/pdfService';
 import { runOCR, combineOCRText } from '../services/ocrService';
-import { parseQuestions, PARSER_PRESETS, buildCustomPattern, testPattern } from '../services/parserService';
+import { parseQuestions } from '../services/parserService';
 
 export default function UploadPage() {
   const navigate = useNavigate();
@@ -41,15 +40,8 @@ export default function UploadPage() {
   const [extractedText, setExtractedText] = useState('');
   const [pasteText, setPasteText] = useState('');
 
-  // Parser config state
-  const [selectedPreset, setSelectedPreset] = useState('standard');
-  const [showParserConfig, setShowParserConfig] = useState(false);
-  const [customPatterns, setCustomPatterns] = useState({
-    question: '',
-    option: '',
-    answer: '',
-  });
-  const [patternTestResult, setPatternTestResult] = useState(null);
+  // Live preview state
+  const [showPreview, setShowPreview] = useState(false);
 
   // Error state
   const [error, setError] = useState(null);
@@ -172,21 +164,7 @@ export default function UploadPage() {
       return;
     }
 
-    let preset = selectedPreset;
-    if (selectedPreset === 'custom') {
-      try {
-        preset = buildCustomPattern(
-          customPatterns.question,
-          customPatterns.option,
-          customPatterns.answer
-        );
-      } catch (err) {
-        setError(`Invalid custom pattern: ${err.message}`);
-        return;
-      }
-    }
-
-    const result = parseQuestions(textToParse, preset);
+    const result = parseQuestions(textToParse);
 
     // Store in sessionStorage for the review page
     sessionStorage.setItem('parsedQuestions', JSON.stringify(result.questions));
@@ -196,27 +174,27 @@ export default function UploadPage() {
     navigate('/review');
   };
 
-  const handleTestPattern = () => {
+  // Live preview of parsing
+  const livePreview = useMemo(() => {
     const text = activeTab === 'upload' ? extractedText : pasteText;
-    if (!text.trim()) {
-      setPatternTestResult({ matchCount: 0, preview: 'No text to test against.' });
-      return;
+    if (!text || text.trim().length < 10) return null;
+    try {
+      const result = parseQuestions(text);
+      const withOptions = result.questions.filter(q => q.options.length >= 2);
+      const withAnswers = result.questions.filter(q => q.correctAnswer);
+      const lowConf = result.questions.filter(q => q.confidence === 'low');
+      return {
+        total: result.questions.length,
+        withOptions: withOptions.length,
+        withAnswers: withAnswers.length,
+        lowConf: lowConf.length,
+        firstQuestion: result.questions[0]?.questionText?.slice(0, 80) || '',
+        warnings: result.warnings,
+      };
+    } catch {
+      return null;
     }
-
-    let patterns;
-    if (selectedPreset === 'custom') {
-      try {
-        patterns = buildCustomPattern(customPatterns.question, customPatterns.option, customPatterns.answer);
-      } catch (err) {
-        setPatternTestResult({ matchCount: 0, preview: `Error: ${err.message}` });
-        return;
-      }
-    } else {
-      patterns = PARSER_PRESETS[selectedPreset];
-    }
-
-    setPatternTestResult(testPattern(text, patterns));
-  };
+  }, [activeTab, extractedText, pasteText]);
 
   const formatFileSize = (bytes) => {
     if (bytes < 1024) return `${bytes} B`;
@@ -456,99 +434,119 @@ export default function UploadPage() {
           </div>
         )}
 
-        {/* Parser Configuration */}
+        {/* Universal Parser Info + Live Preview */}
         <div className="card" style={{ marginBottom: 'var(--space-6)' }}>
-          <div
-            className="flex-between pointer"
-            onClick={() => setShowParserConfig(!showParserConfig)}
-          >
-            <div className="flex-row gap-3">
-              <Settings2 size={20} color="var(--color-accent)" />
-              <div>
-                <h4>Parser Configuration</h4>
-                <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)' }}>
-                  Using: {selectedPreset === 'custom' ? 'Custom Pattern' : PARSER_PRESETS[selectedPreset]?.name}
-                </p>
-              </div>
+          <div className="flex-row gap-3" style={{ marginBottom: 'var(--space-4)' }}>
+            <Sparkles size={20} color="var(--color-accent)" />
+            <div>
+              <h4>Universal Auto-Detect Parser</h4>
+              <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)' }}>
+                Automatically detects question numbers, options (A./a)/(A)/①), and answer keys
+              </p>
             </div>
-            {showParserConfig ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
           </div>
 
-          {showParserConfig && (
-            <div style={{ marginTop: 'var(--space-6)' }} className="animate-fade-in">
-              <div className="input-group" style={{ marginBottom: 'var(--space-4)' }}>
-                <label>Question Pattern Preset</label>
-                <select
-                  className="input select"
-                  value={selectedPreset}
-                  onChange={(e) => setSelectedPreset(e.target.value)}
-                >
-                  {Object.entries(PARSER_PRESETS).map(([key, preset]) => (
-                    <option key={key} value={key}>{preset.name}</option>
-                  ))}
-                  <option value="custom">Custom Pattern (Advanced)</option>
-                </select>
+          {/* Supported formats */}
+          <div style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 'var(--space-2)',
+            marginBottom: 'var(--space-4)',
+          }}>
+            {['SSC', 'UPSC', 'Banking', 'Railway', 'DSSSB', 'State PSC', 'School', 'Coaching'].map(tag => (
+              <span key={tag} className="badge" style={{
+                background: 'var(--color-bg-tertiary)',
+                color: 'var(--color-text-secondary)',
+                fontSize: 'var(--font-size-xs)',
+              }}>
+                {tag}
+              </span>
+            ))}
+          </div>
+
+          {/* Live Preview */}
+          {livePreview && (
+            <div className="animate-fade-in" style={{
+              padding: 'var(--space-4)',
+              background: 'var(--color-bg-tertiary)',
+              borderRadius: 'var(--radius-md)',
+              border: livePreview.lowConf > 0
+                ? '1px solid var(--color-warning-muted)'
+                : '1px solid var(--color-success-muted)',
+            }}>
+              <div className="flex-row gap-2" style={{ marginBottom: 'var(--space-3)' }}>
+                <Eye size={16} color="var(--color-accent)" />
+                <span style={{ fontWeight: 600, fontSize: 'var(--font-size-sm)' }}>Live Preview</span>
               </div>
 
-              {selectedPreset !== 'custom' && (
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+                gap: 'var(--space-3)',
+                marginBottom: 'var(--space-3)',
+              }}>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 'var(--font-size-xl)', fontWeight: 700, color: 'var(--color-primary)' }}>
+                    {livePreview.total}
+                  </div>
+                  <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)' }}>
+                    Questions
+                  </div>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 'var(--font-size-xl)', fontWeight: 700, color: 'var(--color-success)' }}>
+                    {livePreview.withOptions}
+                  </div>
+                  <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)' }}>
+                    With Options
+                  </div>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 'var(--font-size-xl)', fontWeight: 700, color: 'var(--color-secondary)' }}>
+                    {livePreview.withAnswers}
+                  </div>
+                  <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)' }}>
+                    With Answers
+                  </div>
+                </div>
+                {livePreview.lowConf > 0 && (
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: 'var(--font-size-xl)', fontWeight: 700, color: 'var(--color-warning)' }}>
+                      {livePreview.lowConf}
+                    </div>
+                    <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)' }}>
+                      Need Review
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {livePreview.firstQuestion && (
                 <p style={{
                   fontSize: 'var(--font-size-xs)',
                   color: 'var(--color-text-tertiary)',
-                  marginBottom: 'var(--space-4)',
+                  fontStyle: 'italic',
                 }}>
-                  {PARSER_PRESETS[selectedPreset]?.description}
+                  First: "{livePreview.firstQuestion}{livePreview.firstQuestion.length >= 80 ? '…' : ''}"
                 </p>
               )}
 
-              {selectedPreset === 'custom' && (
-                <div className="flex-col gap-4" style={{ marginBottom: 'var(--space-4)' }}>
-                  <div className="input-group">
-                    <label>Question Pattern (Regex)</label>
-                    <input
-                      className="input input-sm"
-                      value={customPatterns.question}
-                      onChange={(e) => setCustomPatterns(p => ({ ...p, question: e.target.value }))}
-                      placeholder="e.g. (?:^|\n)\s*(\d+)\s*[.)]\s*"
-                      style={{ fontFamily: 'monospace' }}
-                    />
-                  </div>
-                  <div className="input-group">
-                    <label>Option Pattern (Regex)</label>
-                    <input
-                      className="input input-sm"
-                      value={customPatterns.option}
-                      onChange={(e) => setCustomPatterns(p => ({ ...p, option: e.target.value }))}
-                      placeholder="e.g. (?:^|\n)\s*([A-Da-d])\s*[.)]\s*"
-                      style={{ fontFamily: 'monospace' }}
-                    />
-                  </div>
-                  <div className="input-group">
-                    <label>Answer Pattern (Regex)</label>
-                    <input
-                      className="input input-sm"
-                      value={customPatterns.answer}
-                      onChange={(e) => setCustomPatterns(p => ({ ...p, answer: e.target.value }))}
-                      placeholder="e.g. (?:Ans(?:wer)?)\s*[:\-\s]*([A-Da-d])"
-                      style={{ fontFamily: 'monospace' }}
-                    />
-                  </div>
+              {livePreview.warnings.length > 0 && (
+                <div style={{ marginTop: 'var(--space-3)', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {livePreview.warnings.slice(0, 3).map((w, i) => (
+                    <div key={i} style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 'var(--space-2)',
+                      fontSize: 'var(--font-size-xs)',
+                      color: 'var(--color-warning)',
+                    }}>
+                      <Info size={12} />
+                      {w}
+                    </div>
+                  ))}
                 </div>
               )}
-
-              <div className="flex-row gap-3">
-                <button className="btn btn-secondary btn-sm" onClick={handleTestPattern}>
-                  <Eye size={14} />
-                  Test Pattern
-                </button>
-                {patternTestResult && (
-                  <span style={{
-                    fontSize: 'var(--font-size-xs)',
-                    color: patternTestResult.matchCount > 0 ? 'var(--color-success)' : 'var(--color-warning)',
-                  }}>
-                    {patternTestResult.preview}
-                  </span>
-                )}
-              </div>
             </div>
           )}
         </div>
