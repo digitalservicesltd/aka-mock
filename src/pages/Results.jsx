@@ -70,10 +70,14 @@ export default function ResultsPage() {
 
   const {
     score, maxScore, totalQuestions, correctCount, incorrectCount,
-    unansweredCount, accuracy, timeTakenSeconds, questions,
+    unansweredCount, accuracy, timeTakenSeconds, totalTimeSeconds,
+    timeRemainingSeconds, questions,
     templateName, completedAt, negativeMarking, negativeMarkValue,
     marksPerQuestion,
   } = attempt;
+
+  // Calculate time remaining if not stored (backward compat)
+  const timeRemaining = timeRemainingSeconds ?? Math.max(0, (totalTimeSeconds || 0) - (timeTakenSeconds || 0));
 
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
@@ -209,6 +213,38 @@ export default function ResultsPage() {
                 {formatTime(timeTakenSeconds)}
               </div>
               <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)' }}>Time Taken</div>
+            </div>
+          </div>
+
+          {/* Time breakdown row */}
+          <div style={{
+            display: 'flex', justifyContent: 'center', gap: 'var(--space-8)',
+            marginTop: 'var(--space-5)',
+            padding: 'var(--space-3) var(--space-4)',
+            background: 'rgba(99, 102, 241, 0.06)',
+            borderRadius: 'var(--radius-md)',
+            maxWidth: 500,
+            margin: 'var(--space-5) auto 0',
+          }}>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-semibold)' }}>
+                {formatTime(totalTimeSeconds || 0)}
+              </div>
+              <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)' }}>Total Allowed</div>
+            </div>
+            <div style={{ width: 1, background: 'var(--color-surface-border)' }} />
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-semibold)', color: 'var(--color-accent)' }}>
+                {formatTime(timeTakenSeconds)}
+              </div>
+              <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)' }}>Time Taken</div>
+            </div>
+            <div style={{ width: 1, background: 'var(--color-surface-border)' }} />
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-semibold)', color: timeRemaining > 0 ? 'var(--color-success)' : 'var(--color-error)' }}>
+                {formatTime(timeRemaining)}
+              </div>
+              <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)' }}>Time Remaining</div>
             </div>
           </div>
 

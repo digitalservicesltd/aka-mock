@@ -40,8 +40,9 @@ export default function TestTakingPage() {
     }
   }, [navigate]);
 
-  // Timer
+  // Timer — uses real timestamps, persists to localStorage
   const totalSeconds = test ? (test.config.timeLimitMinutes || 30) * 60 : 1800;
+  const testTimerId = test?.id || 'default';
 
   const handleTimerExpiry = useCallback(() => {
     if (!submitted) {
@@ -49,16 +50,32 @@ export default function TestTakingPage() {
     }
   }, [submitted]);
 
-  const { timeLeft, formattedTime, isWarning, isDanger, start } = useTimer(
-    totalSeconds,
-    handleTimerExpiry,
-    false
-  );
+  const {
+    timeLeft,
+    elapsed,
+    formattedTimeLeft,
+    isWarning,
+    isDanger,
+    start: startTimer,
+    stop: stopTimer,
+    getStartTimestamp,
+    getRealElapsedMs,
+  } = useTimer({
+    durationSeconds: totalSeconds,
+    timerId: testTimerId,
+    onExpiry: handleTimerExpiry,
+    autoStart: false,
+  });
 
-  // Start timer once test is loaded
+  // Start timer once test is loaded (or resume if already running from localStorage)
   useEffect(() => {
     if (test) {
-      start();
+      // Only start fresh if there's no persisted timer state
+      const timerKey = `mocktest_timer_${testTimerId}`;
+      const existing = localStorage.getItem(timerKey);
+      if (!existing) {
+        startTimer();
+      }
     }
   }, [test]);
 
@@ -236,7 +253,11 @@ export default function TestTakingPage() {
 
     const maxScore = totalQuestions * (config.marksPerQuestion || 1);
     const accuracy = totalQuestions > 0 ? (correctCount / totalQuestions) * 100 : 0;
-    const timeTaken = totalSeconds - timeLeft;
+
+    // Calculate real time taken from timestamps
+    const realElapsedMs = getRealElapsedMs();
+    const timeTaken = Math.round(realElapsedMs / 1000) || (totalSeconds - timeLeft);
+    const timeRemaining = Math.max(0, totalSeconds - timeTaken);
 
     try {
       const attempt = await addTestAttempt({
@@ -254,12 +275,14 @@ export default function TestTakingPage() {
         accuracy,
         timeTakenSeconds: timeTaken,
         totalTimeSeconds: totalSeconds,
+        timeRemainingSeconds: timeRemaining,
         negativeMarking: config.negativeMarking,
         negativeMarkValue: config.negativeMarkValue,
         marksPerQuestion: config.marksPerQuestion,
       });
 
-      // Clean up
+      // Clean up timer and progress
+      stopTimer();
       await deleteTestProgress(test.id).catch(() => {});
       sessionStorage.removeItem('activeTest');
 
@@ -291,7 +314,7 @@ export default function TestTakingPage() {
 
           <div className={`timer ${isWarning ? 'warning' : ''} ${isDanger ? 'danger' : ''}`}>
             <Clock size={18} />
-            {formattedTime}
+            {formattedTimeLeft}
           </div>
 
           <button

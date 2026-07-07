@@ -306,6 +306,19 @@ export default function TestConfigPage() {
                 <Clock size={14} style={{ verticalAlign: -2, marginRight: 4 }} />
                 Time Limit (minutes)
               </label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)', marginBottom: 'var(--space-2)' }}>
+                {[5, 10, 15, 30, 45, 60, 90, 120, 180].map((mins) => (
+                  <button
+                    key={mins}
+                    type="button"
+                    className={`btn btn-sm ${config.timeLimitMinutes === mins ? 'btn-primary' : 'btn-ghost'}`}
+                    onClick={() => updateConfig('timeLimitMinutes', mins)}
+                    style={{ minWidth: 48, padding: 'var(--space-1) var(--space-2)', fontSize: 'var(--font-size-xs)' }}
+                  >
+                    {mins >= 60 ? `${mins / 60}h` : `${mins}m`}
+                  </button>
+                ))}
+              </div>
               <input
                 type="number"
                 className="input"
@@ -313,6 +326,7 @@ export default function TestConfigPage() {
                 onChange={(e) => updateConfig('timeLimitMinutes', parseInt(e.target.value) || 1)}
                 min={1}
                 max={300}
+                placeholder="Custom duration"
               />
             </div>
 

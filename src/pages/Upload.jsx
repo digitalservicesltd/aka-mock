@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useMemo } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import {
   Upload as UploadIcon,
@@ -174,26 +174,41 @@ export default function UploadPage() {
     navigate('/review');
   };
 
-  // Live preview of parsing
-  const livePreview = useMemo(() => {
+  // Live preview with debouncing (300ms) for performance
+  const [livePreview, setLivePreview] = useState(null);
+  const previewTimerRef = useRef(null);
+
+  useEffect(() => {
     const text = activeTab === 'upload' ? extractedText : pasteText;
-    if (!text || text.trim().length < 10) return null;
-    try {
-      const result = parseQuestions(text);
-      const withOptions = result.questions.filter(q => q.options.length >= 2);
-      const withAnswers = result.questions.filter(q => q.correctAnswer);
-      const lowConf = result.questions.filter(q => q.confidence === 'low');
-      return {
-        total: result.questions.length,
-        withOptions: withOptions.length,
-        withAnswers: withAnswers.length,
-        lowConf: lowConf.length,
-        firstQuestion: result.questions[0]?.questionText?.slice(0, 80) || '',
-        warnings: result.warnings,
-      };
-    } catch {
-      return null;
+    if (!text || text.trim().length < 10) {
+      setLivePreview(null);
+      return;
     }
+
+    if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
+
+    previewTimerRef.current = setTimeout(() => {
+      try {
+        const result = parseQuestions(text);
+        const withOptions = result.questions.filter(q => q.options.length >= 2);
+        const withAnswers = result.questions.filter(q => q.correctAnswer);
+        const lowConf = result.questions.filter(q => q.confidence === 'low');
+        setLivePreview({
+          total: result.questions.length,
+          withOptions: withOptions.length,
+          withAnswers: withAnswers.length,
+          lowConf: lowConf.length,
+          firstQuestion: result.questions[0]?.questionText?.slice(0, 80) || '',
+          warnings: result.warnings,
+        });
+      } catch {
+        setLivePreview(null);
+      }
+    }, 300);
+
+    return () => {
+      if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
+    };
   }, [activeTab, extractedText, pasteText]);
 
   const formatFileSize = (bytes) => {

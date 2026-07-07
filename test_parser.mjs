@@ -5,9 +5,9 @@ function runTest(name, text, expected) {
   const pass = result.questions.length === expected;
   console.log(`${pass ? '✅' : '❌'} ${name}: ${result.questions.length}/${expected} questions`);
   result.questions.forEach((q, i) => {
-    console.log(`   Q${i+1}: "${q.questionText.slice(0, 55).padEnd(55)}" | ${q.options.length} opts (${q.options.map(o=>o.label).join(',')}) | Ans: ${q.correctAnswer || '-'} | ${q.confidence}`);
+    console.log(`   Q${i+1}: "${q.questionText.slice(0, 50).padEnd(50)}" | ${q.options.length} opts (${q.options.map(o=>o.label).join(',')}) | Ans: ${q.correctAnswer || '-'} | conf: ${q.confidence}(${q.confidenceScore})`);
   });
-  if (result.warnings.length) console.log(`   Warnings: ${result.warnings.join('; ')}`);
+  if (result.warnings.length) console.log(`   ⚠ ${result.warnings.join('; ')}`);
   console.log('');
   return pass;
 }
@@ -37,7 +37,7 @@ C) 5
 D) 6
 Answer: B`, 3)) passed++;
 
-// Test 2: Mixed formats (SSC + UPSC + Banking style)
+// Test 2: Mixed formats (5 questions)
 total++;
 if (runTest('Mixed formats (5 questions)', `1. What is the chemical formula of water?
 A) H2O
@@ -67,7 +67,7 @@ C. Jabalpur
 D. Gwalior
 Ans: B
 
-5 What does CPU stand for?
+5. What does CPU stand for?
 a. Central Processing Unit
 b. Central Program Unit
 c. Computer Processing Unit
@@ -180,7 +180,127 @@ A) Mumbai
 B) Delhi
 C) Kolkata
 D) Chennai
-\u0909\u0924\u094D\u0924\u0930: B`, 1)) passed++;
+उत्तर: B`, 1)) passed++;
+
+// =====================================================
+// NEW: Noise Tolerance Tests
+// =====================================================
+
+// Test 10: Asterisks and markdown noise
+total++;
+if (runTest('Asterisks/markdown noise', `**1. What is the capital of India?**
+A) Mumbai
+B) Delhi
+C) Kolkata
+D) Chennai
+* Answer: B
+
+**2. Which is the largest ocean?**
+A) Atlantic
+B) Pacific
+C) Indian
+D) Arctic
+**Ans : B`, 2)) passed++;
+
+// Test 11: Checkmarks and symbols in answers
+total++;
+if (runTest('Checkmarks/symbols in answers', `1. What is H2O?
+A) Hydrogen
+B) Water
+C) Oxygen
+D) Nitrogen
+✓ Correct Answer : B
+
+2. 5 + 3 = ?
+A) 6
+B) 7
+C) 8
+D) 9
+✔ Answer: C`, 2)) passed++;
+
+// Test 12: Extra blank lines and inconsistent spacing
+total++;
+if (runTest('Extra blank lines + spacing', `1.   What   is   the   capital   of   France?
+
+A)   London
+
+B)   Paris
+
+C)   Berlin
+
+D)   Madrid
+
+Answer: B
+
+
+2.     Which planet is red?
+
+A)  Earth
+
+B)  Mars
+
+C)  Jupiter
+
+D)  Venus
+
+Answer: B`, 2)) passed++;
+
+// Test 13: OCR errors in keywords
+total++;
+if (runTest('OCR error tolerance', `1. What is the speed of light?
+A) 100 km/s
+B) 300000 km/s
+C) 1000 km/s
+D) 50000 km/s
+Ansvver: B
+
+2. Who invented telephone?
+A) Edison
+B) Bell
+C) Tesla
+D) Newton
+Answor: B`, 2)) passed++;
+
+// Test 14: Horizontal rules and decorations
+total++;
+if (runTest('Horizontal rules and decorations', `---
+1. What is gravity?
+---
+A) A force
+B) A speed
+C) A color
+D) A sound
+Answer: A
+___
+2. What is the Sun?
+===
+A) A planet
+B) A star
+C) A moon
+D) A comet
+Answer: B
+---`, 2)) passed++;
+
+// Test 15: Bullets and arrows mixed in
+total++;
+if (runTest('Bullets and arrows', `1. Choose the correct answer:
+A) First option here
+B) Second option here
+C) Third option here
+D) Fourth option here
+Answer: A
+
+2. Select the right one:
+A) Alpha
+B) Beta
+C) Gamma
+D) Delta
+Answer: C`, 2)) passed++;
 
 console.log(`\n${'='.repeat(50)}`);
 console.log(`Results: ${passed}/${total} tests passed`);
+if (passed === total) {
+  console.log('🎉 ALL TESTS PASSED!');
+} else {
+  console.log(`⚠️  ${total - passed} test(s) FAILED`);
+}
