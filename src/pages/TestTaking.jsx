@@ -530,7 +530,7 @@ export default function TestTakingPage() {
                 </div>
                 <div className="flex-between">
                   <span style={{ color: 'var(--color-text-secondary)' }}>Time remaining</span>
-                  <span style={{ fontWeight: 'var(--font-weight-semibold)' }}>{formattedTime}</span>
+                  <span style={{ fontWeight: 'var(--font-weight-semibold)' }}>{formattedTimeLeft}</span>
                 </div>
               </div>
             </div>
